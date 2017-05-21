@@ -59,18 +59,21 @@ var smoothScroll = (function () {
 
 var youtube = {
   play: (id, rect, shared) => {
-    iframe = document.createElement('iframe');
-    iframe.setAttribute('width', config.width);
-    iframe.setAttribute('height', config.width * 180 / 320);
-    iframe.setAttribute('allowfullscreen', true);
-
-    // unload the gif loader when player is loaded
-    iframe.addEventListener('load', () => {
-      window.setTimeout(() => {
-        if (iframe) {
-          iframe.dataset.loaded = true;
-        }
-      }, 10000);
+    // cleaning id; https://github.com/schomery/youtube-hover/issues/12
+    id = id.split('&')[0].split('?')[0];
+    //
+    iframe = Object.assign(document.createElement('iframe'), {
+      width: config.width,
+      height:  config.width * 180 / 320,
+      allowfullscreen: true,
+      // unload the gif loader when player is loaded
+      onload: () => {
+        window.setTimeout(() => {
+          if (iframe) {
+            iframe.dataset.loaded = true;
+          }
+        }, 10000);
+      }
     });
 
     function play () {
@@ -80,7 +83,7 @@ var youtube = {
           url: 'https://www.youtube.com/shared?ci=' + id
         }, id => {
           if (id) {
-            iframe.setAttribute('src', `https://www.youtube.com/embed/${id}?autoplay=1`);
+            iframe.setAttribute('src', `https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1`);
           }
           else {
             iframe.dataset.error = true;
@@ -88,7 +91,7 @@ var youtube = {
         });
       }
       else {
-        iframe.setAttribute('src', `https://www.youtube.com/embed/${id}?autoplay=1`);
+        iframe.setAttribute('src', `https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1`);
       }
     }
 
@@ -159,6 +162,9 @@ var youtube = {
 
 var timer;
 document.addEventListener('mouseover', e => {
+  if (timer) {
+    timer = window.clearTimeout(timer);
+  }
   let target = e.target;
   if (target) {
     let link = target.closest('a');
@@ -190,25 +196,18 @@ document.addEventListener('mouseover', e => {
         }
 
         if (id && id.length) {
-          window.clearTimeout(timer);
           timer = window.setTimeout((link) => {
-            let activeLink = [...document.querySelectorAll(':hover')].pop();
-            if (activeLink) {
-              activeLink = activeLink.closest('a');
+            let rect = link.getBoundingClientRect();
+            youtube.play(id[1], rect, shared);
+            if (config.strike) {
+              [...document.querySelectorAll(`a[href="${href}"]`), link].
+                forEach(l => l.style['text-decoration'] = 'line-through');
             }
-            if (link === activeLink) {
-              let rect = link.getBoundingClientRect();
-              youtube.play(id[1], rect, shared);
-              if (config.strike) {
-                [...document.querySelectorAll(`a[href="${href}"]`), link].
-                  forEach(l => l.style['text-decoration'] = 'line-through');
-              }
-              if (config.history) {
-                chrome.runtime.sendMessage({
-                  url: href,
-                  cmd: 'history'
-                });
-              }
+            if (config.history) {
+              chrome.runtime.sendMessage({
+                url: href,
+                cmd: 'history'
+              });
             }
           }, config.delay, link);
         }
@@ -220,5 +219,18 @@ document.addEventListener('click', (e) => {
   if (iframe && e.target.closest('.ihvyoutube') === null) {
     [...document.querySelectorAll('.ihvyoutube')].forEach(f => f.parentNode.removeChild(f));
     iframe = null;
+    e.preventDefault();
   }
+});
+// keydown
+document.addEventListener('keydown', (e) => {
+  if (iframe && e.code === 'Escape') {
+    document.body.dispatchEvent(new Event('click', {bubbles: true}));
+    e.preventDefault();
+  }
+  /*
+  else if (iframe && e.code === 'Space') {
+    iframe.contentWindow.postMessage('{"event":"command","func":"stopVideo","args":""}', '*');
+  }
+  */
 });
